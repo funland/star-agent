@@ -1,0 +1,10 @@
+{
+  "name": "star-agent",
+  "version": "1.0.0",
+  "description": "3D AI Agent Status Visualization",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "private": true
+}
