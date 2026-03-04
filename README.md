@@ -2,7 +2,7 @@
 
 科幻风格的 AI Agent 状态可视化面板，基于 Three.js 开发。
 
-![Preview](https://via.placeholder.com/800x400?text=Star+Agent+Preview)
+![Preview](https://ibb.co/5gQxLcVp)
 
 ## 特性
 
