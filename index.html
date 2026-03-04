@@ -456,7 +456,7 @@
 
     function fetchStatus() {
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'http://192.168.10.155:34123/api/status?t=' + new Date().getTime(), true);
+      xhr.open('GET', '//' + window.location.host + '/api/status?t=' + new Date().getTime(), true);
       xhr.onload = function() {
         console.log('XHR URL:', xhr.responseURL);
         console.log('XHR status:', xhr.status);
