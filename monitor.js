@@ -89,6 +89,18 @@ function checkOpenClawStatus(callback) {
     // 根据活动时间判断状态
     let status, message;
     
+    // 获取 token 使用量
+    let tokenUsage = null;
+    if (recentLine) {
+      const tokenMatch = recentLine.match(/(\d+)[kmKM]?\/\d+[kmKM]?\s*\((\d+)%\)/);
+      if (tokenMatch) {
+        tokenUsage = {
+          current: tokenMatch[1] + 'k',
+          percent: parseInt(tokenMatch[2])
+        };
+      }
+    }
+    
     if (recentMinutes === 0) {
       // 刚收到消息/正在处理
       status = 'working';
@@ -111,7 +123,8 @@ function checkOpenClawStatus(callback) {
     callback({ 
       status: status, 
       message: message, 
-      task: lastTask 
+      task: lastTask,
+      token: tokenUsage
     });
   });
 }

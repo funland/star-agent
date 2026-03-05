@@ -94,6 +94,19 @@
   
   <div id="connection-status">● 连接中...</div>
   
+  <div id="weather" style="position:fixed;top:20px;right:20px;color:rgba(255,255,255,0.6);font-size:14px;z-index:100;font-family:'SF Pro',-apple-system,sans-serif;display:flex;align-items:center;gap:8px;">
+    <span id="weather-icon">☁️</span>
+    <span id="weather-temp">--°</span>
+    <span id="weather-location" style="font-size:12px;opacity:0.6;">Shanghai</span>
+  </div>
+  
+  <div id="magic-bar" style="position:fixed;top:20px;left:50%;transform:translateX(-50%);color:rgba(100,255,100,0.8);font-size:12px;z-index:100;font-family:'SF Pro',-apple-system,sans-serif;">
+    <span id="magic-value">--</span>
+    <div style="width:80px;height:4px;background:rgba(100,255,100,0.2);border-radius:2px;margin-left:8px;display:inline-block;vertical-align:middle;">
+      <div id="magic-fill" style="width:0%;height:100%;background:linear-gradient(90deg,#00ff00,#88ff88);border-radius:2px;transition:width 0.5s;"></div>
+    </div>
+  </div>
+  
   <div id="audio-btn" onclick="initAudio(); this.style.display='none';" style="position:fixed;bottom:20px;right:20px;padding:10px 20px;background:rgba(255,255,255,0.1);color:#888;border:1px solid #444;border-radius:20px;cursor:pointer;font-size:12px;z-index:100;">🔊 开启音效</div>
   
   <div id="quote" style="position:fixed;bottom:30px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.4);font-size:14px;font-style:italic;text-align:center;max-width:80%;z-index:100;font-family:'SF Pro',-apple-system,sans-serif;"></div>
@@ -145,10 +158,13 @@
     };
 
     // ============== Three.js 场景 ==============
-    let scene, camera, renderer, agent, agentEdges, baseRing;
+    let scene, camera, renderer, agent, agentEdges;
+    let baseRings = []; // 多个光环
     let currentState = 'idle';
     let targetColor, targetEmissive, targetSpeed, targetScale;
     let clock = new THREE.Clock();
+    let rainbowMode = false; // 彩虹模式
+    let rainbowStartTime = 0;
 
     // ============== 科幻音效 ==============
     let audioCtx, masterGain;
@@ -261,35 +277,25 @@
       const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
       agent.add(edges);
       
-      // 底部光环 - 科幻反光效果
-      const baseGeometry = new THREE.RingGeometry(0.8, 1.4, 64);
-      const baseMaterial = new THREE.MeshStandardMaterial({
-        color: STATE_CONFIG.idle.color,
-        emissive: STATE_CONFIG.idle.color,
-        emissiveIntensity: 0.8,
-        transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide,
-        metalness: 0.8,
-        roughness: 0.2
-      });
-      baseRing = new THREE.Mesh(baseGeometry, baseMaterial);
-      baseRing.rotation.x = -Math.PI / 2;
-      baseRing.position.y = -1.35;
-      scene.add(baseRing);
-      
-      // 第二个光环 - 外圈
-      const baseGeometry2 = new THREE.RingGeometry(1.5, 1.7, 64);
-      const baseMaterial2 = new THREE.MeshBasicMaterial({
-        color: STATE_CONFIG.idle.color,
-        transparent: true,
-        opacity: 0.25,
-        side: THREE.DoubleSide
-      });
-      const baseRing2 = new THREE.Mesh(baseGeometry2, baseMaterial2);
-      baseRing2.rotation.x = -Math.PI / 2;
-      baseRing2.position.y = -1.35;
-      scene.add(baseRing2);
+      // 底部光环 - 科幻反光效果 - 多层彩虹
+      baseRings = []; // 存储多个光环
+      for (let i = 0; i < 5; i++) {
+        const inner = 0.6 + i * 0.25;
+        const outer = 0.8 + i * 0.25;
+        const ringGeo = new THREE.RingGeometry(inner, outer, 64);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: STATE_CONFIG.idle.color,
+          transparent: true,
+          opacity: 0.5 - i * 0.08,
+          side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = -1.35;
+        ring.position.z = i * 0.01; // 轻微错开
+        scene.add(ring);
+        baseRings.push(ring);
+      }
       
       // 背景粒子
       createParticles();
@@ -355,8 +361,13 @@
       if (agentEdges && agentEdges.material) {
         agentEdges.material.color = new THREE.Color(targetColor);
       }
-      if (baseRing && baseRing.material) {
-        baseRing.material.color = new THREE.Color(targetColor);
+      // 更新所有光环颜色
+      if (baseRings && baseRings.length > 0) {
+        baseRings.forEach(ring => {
+          if (ring.material) {
+            ring.material.color = new THREE.Color(targetColor);
+          }
+        });
       }
       
       // 更新 UI
@@ -376,23 +387,51 @@
       const delta = clock.getDelta();
       const config = STATE_CONFIG[currentState];
       
-      // 平滑过渡颜色
-      agent.material.color.lerp(new THREE.Color(targetColor), 0.05);
-      agent.material.emissive.lerp(new THREE.Color(targetEmissive), 0.05);
+      // 彩虹模式 - 只让光环变色
+      if (rainbowMode) {
+        const rainbowT = (time - rainbowStartTime) * 2;
+        // 光环彩虹滚动
+        baseRings.forEach((ring, i) => {
+          const t = rainbowT + i * 0.5;
+          ring.material.color.copy(getRainbowColor(t));
+        });
+        // 边缘发光
+        if (agentEdges) {
+          agentEdges.material.color.copy(getRainbowColor(rainbowT + 2));
+        }
+        // 石碑主体保持原色
+        agent.material.emissive.lerp(new THREE.Color(targetEmissive), 0.05);
+      } else {
+        // 正常状态 - 石碑变色
+        agent.material.color.lerp(new THREE.Color(targetColor), 0.05);
+        agent.material.emissive.lerp(new THREE.Color(targetEmissive), 0.05);
+        // 光环跟随状态颜色
+        baseRings.forEach(ring => {
+          ring.material.color.lerp(new THREE.Color(targetColor), 0.1);
+        });
+        // 边缘发光
+        if (agentEdges) {
+          agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.1);
+        }
+      }
       
       // 状态动画
       switch (config.animation) {
         case 'breathe':
           // 呼吸效果 - 轻微上下浮动
           if (agent) agent.position.y = Math.sin(time * config.speed) * 0.1;
-          if (baseRing) baseRing.scale.setScalar(1 + Math.sin(time * config.speed * 0.5) * 0.1);
+          if (baseRings) baseRings.forEach((ring, i) => {
+            ring.scale.setScalar(1 + Math.sin(time * config.speed + i * 0.5) * 0.1);
+          });
           if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.1);
           break;
           
         case 'scan':
           // 扫描效果 - 像是启动扫描
           if (agent) agent.position.y = Math.sin(time * 2) * 0.15;
-          if (baseRing) baseRing.scale.setScalar(1 + Math.sin(time * 3) * 0.15);
+          if (baseRings) baseRings.forEach((ring, i) => {
+            ring.scale.setScalar(1 + Math.sin(time * 3 + i * 0.3) * 0.15);
+          });
           if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.1);
           break;
           
@@ -402,7 +441,9 @@
             agent.rotation.y = time * 0.5;
             agent.position.y = Math.sin(time * 4) * 0.1;
           }
-          if (baseRing) baseRing.scale.setScalar(1 + Math.sin(time * 2) * 0.2);
+          if (baseRings) baseRings.forEach((ring, i) => {
+            ring.scale.setScalar(1 + Math.sin(time * 2 + i * 0.4) * 0.2);
+          });
           if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.15);
           break;
           
@@ -413,22 +454,23 @@
             agent.position.x = Math.sin(time * 10) * 0.05;
           }
           if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.2);
-          if (baseRing) baseRing.material.opacity = Math.abs(Math.sin(time * 5)) * 0.8;
+          if (baseRings) baseRings.forEach(ring => {
+            ring.material.opacity = Math.abs(Math.sin(time * 5)) * 0.6;
+          });
           break;
           
         case 'rotate':
           // 旋转效果 - 缓慢旋转展示
           if (agent) agent.rotation.y = time * config.speed;
           if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.1);
-          if (baseRing) baseRing.rotation.z = time * 0.2;
+          if (baseRings) baseRings.forEach((ring, i) => {
+            ring.rotation.z = time * 0.2 + i * 0.1;
+          });
           break;
       }
       
       // 边缘发光跟随
       if (agentEdges) agentEdges.material.color.lerp(new THREE.Color(targetColor), 0.1);
-      if (baseRing) {
-        baseRing.material.color.lerp(new THREE.Color(targetColor), 0.1);
-      }
       
       // 相机轻微移动
       camera.position.x = Math.sin(time * 0.1) * 0.3;
@@ -511,6 +553,14 @@
       const taskText = data.task || data.message || '';
       console.log('Mapped state:', newState);
       setState(newState, taskText);
+      
+      // 更新魔法值 (Token 剩余量)
+      if (data.token) {
+        var percent = data.token.percent || 0;
+        var remaining = Math.round(200 - (200 * percent / 100));
+        document.getElementById('magic-value').textContent = remaining + 'k';
+        document.getElementById('magic-fill').style.width = (100 - percent) + '%';
+      }
     }
 
     function updateConnectionStatus(status) {
@@ -533,6 +583,43 @@
     // 启动轮询
     init();
     startPolling();
+    
+    // ============== 天气 ==============
+    function fetchWeather() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/weather?t=' + new Date().getTime(), true);
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          try {
+            var data = JSON.parse(xhr.responseText);
+            document.getElementById('weather-icon').textContent = data.icon || '☁️';
+            document.getElementById('weather-temp').textContent = data.temp + '°';
+          } catch(e) {}
+        }
+      };
+      xhr.send();
+    }
+    // 每10分钟更新一次天气
+    fetchWeather();
+    setInterval(fetchWeather, 10 * 60 * 1000);
+    
+    // ============== 彩虹模式点击事件 ==============
+    document.addEventListener('click', function(e) {
+      // 切换彩虹模式
+      rainbowMode = !rainbowMode;
+      rainbowStartTime = clock.getElapsedTime();
+      if (rainbowMode) {
+        playStateSound('idle'); // 播放音效
+      }
+    });
+    
+    // 彩虹颜色函数
+    function getRainbowColor(t) {
+      const r = Math.sin(t * 1.0) * 0.5 + 0.5;
+      const g = Math.sin(t * 1.0 + 2) * 0.5 + 0.5;
+      const b = Math.sin(t * 1.0 + 4) * 0.5 + 0.5;
+      return new THREE.Color(r, g, b);
+    }
     
     // ============== 科幻格言 ==============
     const quotes = [
